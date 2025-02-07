@@ -1,0 +1,1331 @@
+---
+title: "Diel_Data_Paper"
+author: "Sarah Tucker"
+date: "2024-11-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+```
+
+
+```{r}
+buoy_site=c("HP1"="orange", "STO1"="purple", "51207h"="#605F5E", "mokh1h"="gray")
+```
+
+
+```{r}
+####
+##everyhour
+
+tides=read.delim("tides_everyhour_mokuoloe_edit.txt", header=TRUE, fill=TRUE)
+
+tides=tides%>%dplyr::mutate(date.time=make_datetime(
+  year = YY,
+  month = MM,
+  day = DD,
+  hour = hh,
+  min = mm,
+  tz = "HST"
+))
+
+
+tides$date.time <- as.POSIXct(tides$date.time, format = '%Y-%m-%dT%H:%M:%S', tz = 'HST')
+tides$Time <- format(as.POSIXct(
+  tides$date.time),format = "%H:%M:%S", tz = 'HST')
+
+names(tides)
+Tidal_full=ggplot(data=tides, aes(x=date.time, y = Tidal_height.m)) +
+          geom_line() +
+    xlab("Date")+
+ theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))+geom_vline(xintercept=as.POSIXct("2021-08-18 09:00:00", tz="HST"), 
+                color = "blue", size=1, linetype=3)+ylab("Tides")
+
+Tidal_full
+
+ggsave("Figures_Tables/tides.png")
+ggsave("Figures_Tables/tides.svg")
+
+
+sampling_tides=tides%>%dplyr::filter(date.time > as.POSIXct("2021-08-17 01:00:00", tz="HST"))%>%dplyr::filter(date.time < as.POSIXct("2021-08-21 09:00:00", tz="HST"))
+
+
+Tidal=ggplot(data=sampling_tides, aes(x=date.time, y = Tidal_height.m)) +
+          geom_line() +
+    xlab("")+
+ theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))+geom_vline(xintercept=as.POSIXct("2021-08-18 09:00:00", tz="HST"), 
+                color = "blue", size=1, linetype=3)+ylab("Tides")+scale_x_datetime(date_breaks = '6 hours')+geom_vline(xintercept=as.POSIXct("2021-08-18 01:00:00", tz="HST"), 
+                color = "darkred", size=0.5, linetype=1)+theme(axis.text.x=element_text(angle = 90))+ylab("Tidal Height (m)")
+
+Tidal
+
+ggsave("Figures_Tables/Tidal.png", height=5, width=7)
+ggsave("Figures_Tables/Tidal.svg", height=6, width=6.5)
+```
+
+
+
+###First lets take a peak at the ancillary environmental data that we gathered from various environmental monitoring platforms. We accessed surface ocean temperature data covering the period from 2020–2021 from NOAA station mokh1 in Kāneʻohe Bay, surface ocean temperatures and wave height from NOAA station 51207 in the adjacent offshore, and rainfall and tidal height from the NOAA weather station on Moku o Loʻe. We downloaded these data from their respective sites between November 20 and December 6, 2024. 
+##Supplemental Figure 1
+
+##lets look at temperature and wind
+###Get the data from the coastal buoy into a format that works
+
+```{r}
+
+mokh1h=read.delim("mokh1h2020.txt", header=TRUE, fill=TRUE)
+mokh1h2=read.delim("mokh1h2021.txt", header=TRUE, fill=TRUE)
+mokh1h=rbind(mokh1h, mokh1h2)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+
+mokh1h=mokh1h%>%dplyr::mutate(date.time=make_datetime(
+  year = YY,
+  month = MM,
+  day = DD,
+  hour = hh,
+  min = mm,
+  tz = "UTC"
+))
+
+
+mokh1h=mokh1h%>%dplyr::rename("date.time.UTC"="date.time")
+mokh1h$date.time=with_tz(mokh1h$date.time.UTC, "HST")
+
+
+mokh1h$data.time <- as.POSIXct(mokh1h$date.time, format = '%Y-%m-%dT%H:%M:%S', tz = 'HST')
+mokh1h$Time <- format(as.POSIXct(
+  mokh1h$date.time),format = "%H:%M:%S", tz = 'HST')
+
+mokh1h$Date <- as.Date(mokh1h$date.time,tz = 'HST')
+
+mokh1h$Site="mokh1h"
+
+names(mokh1h)
+
+
+###for later
+wind=mokh1h%>%dplyr::select("date.time.UTC", "date.time" ,"Time" ,   "Date", "Site", "R.WSP")
+
+wind[wind == 999] <- NA
+wind[wind == 99] <- NA
+
+
+
+
+
+mokh1h=mokh1h%>%dplyr::select("date.time.UTC", "date.time" ,"Time" ,   "Date", "Site", "Temp", "ATMP")
+lapply(mokh1h, class)
+
+mokh1h[mokh1h == 999] <- NA
+mokh1h[mokh1h == 99] <- NA
+lapply(mokh1h, class)
+
+f <- lapply(mokh1h, summary)
+#write.csv(mokh1h, "mokh1h_2020_2021_cleaned_tz.csv")
+
+
+
+```
+
+
+```{r}
+
+##filter data to just have the July 2021 through Aug 2021 time period
+Jul_Aug_wind=wind%>%dplyr::filter(date.time > as.POSIXct("2021-07-01 01:00:00", tz="HST"))%>%dplyr::filter(date.time < as.POSIXct("2021-08-31 01:00:00", tz="HST"))
+
+wind_plot=ggplot(data=Jul_Aug_wind, aes(x=date.time, y = R.WSP)) +
+          geom_point(color="#d3d3d3") + geom_line(color="#d3d3d3") +
+    xlab("Date")+
+ theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))+geom_vline(xintercept=as.POSIXct("2021-08-18 09:00:00", tz="HST"), 
+                color = "blue", size=1, linetype=3)+ylab("Wind Speed (m/s)")
+
+wind_plot
+ggsave("Figures_Tables/Wind_conditions.png")
+ggsave("Figures_Tables/Wind_conditions.svg")
+
+
+
+
+#heres just the HADS time period of wind 
+HADS_wind=wind%>%dplyr::filter(date.time > as.POSIXct("2021-08-09 01:00:00", tz="HST"))%>%dplyr::filter(date.time < as.POSIXct("2021-08-22 10:30:00", tz="HST"))
+
+
+HADS_ff=ggplot(data=HADS_wind, aes(x=date.time, y = R.WSP, group=Site, color=Site)) +
+          geom_point() + geom_line() +
+    xlab("Date")+
+ theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))+ geom_vline(xintercept=as.POSIXct("2021-08-18 09:00:00", tz="HST"), 
+                color = "blue", size=2)+ylab("Wind Speed (m/s)")
+
+HADS_ff
+
+
+
+
+```
+
+
+
+###offshore buoy
+```{r}
+off_buoy=read.delim("offshore_51207h2020.txt", header=TRUE, fill=TRUE)
+off_buoy2=read.delim("offshore_51207h2021.txt", header=TRUE, fill=TRUE)
+off_buoy=rbind(off_buoy, off_buoy2)
+library(lubridate)
+
+off_buoy=off_buoy%>%dplyr::mutate(date.time=make_datetime(
+  year = YY,
+  month = MM,
+  day = DD,
+  hour = hh,
+  min = mm,
+  tz = "UTC"
+))
+
+
+off_buoy=off_buoy%>%dplyr::rename("date.time.UTC"="date.time")
+off_buoy$date.time=with_tz(off_buoy$date.time.UTC, "HST")
+
+
+off_buoy$data.time <- as.POSIXct(off_buoy$date.time, format = '%Y-%m-%dT%H:%M:%S', tz = 'HST')
+off_buoy$Time <- format(as.POSIXct(
+  off_buoy$date.time),format = "%H:%M:%S", tz = 'HST')
+
+off_buoy$Date <- as.Date(off_buoy$date.time,tz = 'HST')
+
+off_buoy$Site="51207h"
+
+names(off_buoy)
+summary(off_buoy$WVHT)
+wave=off_buoy%>%dplyr::select("date.time.UTC", "date.time" ,"Time" ,   "Date", "Site", "WVHT")
+
+wave[wave == 999] <- NA
+wave[wave == 99] <- NA
+
+
+off_buoy=off_buoy%>%dplyr::select("date.time.UTC", "date.time" ,"Time" ,   "Date", "Site", "Temp", "ATMP")
+lapply(off_buoy, class)
+
+off_buoy[off_buoy == 999] <- NA
+off_buoy[off_buoy == 99] <- NA
+lapply(off_buoy, class)
+
+f <- lapply(off_buoy, summary)
+#write.csv(off_buoy, "off_buoy_2020_2021_cleaned_tz.csv")
+
+
+
+```
+
+
+##lets look at wave height
+```{r}
+
+names(wind)
+
+wind_waves=full_join(wind, wave, by="date.time")
+
+Aug_wave=wind_waves%>%dplyr::filter(date.time > as.POSIXct("2021-07-01 01:00:00", tz="HST"))%>%dplyr::filter(date.time < as.POSIXct("2021-08-31 01:00:00", tz="HST"))
+
+wave_plot=ggplot(data=Aug_wave, aes(x=date.time, y = WVHT)) +
+          geom_point(color="#A9A9A9") + geom_line(color="#A9A9A9") +
+    xlab("Date")+
+ theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))+geom_vline(xintercept=as.POSIXct("2021-08-18 09:00:00", tz="HST"), 
+                color = "blue", size=1, linetype=3)+ylab("Wave Height (m)")
+
+wave_plot
+ggsave("Figures_Tables/wave_conditions.png")
+ggsave("Figures_Tables/wave_conditions.svg")
+
+
+longer_wave=wave%>%dplyr::filter(date.time > as.POSIXct("2020-12-01 01:00:00", tz="HST"))%>%dplyr::filter(date.time < as.POSIXct("2021-08-31 01:00:00", tz="HST"))
+
+longer_wave_plot=ggplot(data=longer_wave, aes(x=date.time, y = WVHT)) +
+          geom_point(color="#A9A9A9") + geom_line(color="#A9A9A9") +
+    xlab("Date")+
+ theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))+geom_vline(xintercept=as.POSIXct("2021-08-18 09:00:00", tz="HST"), 
+                color = "blue", size=1, linetype=3)+ylab("Wave Height (m)")+geom_vline(xintercept=as.POSIXct("2020-12-23 09:00:00", tz="HST"), 
+                color = "blue", size=1, linetype=3)+geom_vline(xintercept=as.POSIXct("2021-05-24 09:00:00", tz="HST"),color = "blue", size=1, linetype=3)
+longer_wave_plot
+```
+
+
+#let's look at rainfall during this time 
+```{r}
+rain=read.csv("RAINFALL_aws_himb_fdd1_cc53_607b.csv", header=TRUE, fill=TRUE)
+
+?make_datetime()
+
+rain=rain%>%dplyr::mutate(date.time=make_datetime(
+  year = YY,
+  month = MM,
+  day = DD,
+  hour = hh,
+  min = mm,
+  tz = "UTC"
+))
+
+
+rain=rain%>%dplyr::rename("date.time.UTC"="date.time")
+rain$date.time=with_tz(rain$date.time.UTC, "HST")
+
+
+rain$date.time <- as.POSIXct(rain$date.time, format = '%Y-%m-%dT%H:%M:%S', tz = 'HST')
+rain$Time <- format(as.POSIXct(
+  rain$date.time),format = "%H:%M:%S", tz = 'HST')
+
+rain$Date <- as.Date(rain$date.time,tz = 'HST')
+
+rain$Site="mokh1h"
+
+rain=rain%>%dplyr::select("date.time.UTC", "date.time" ,"Time" ,   "Date", "Site", "rainfall_mm")
+
+Long_Rainfall=ggplot(data=rain, aes(x=date.time, y = rainfall_mm, group=Site, color=Site)) +
+          geom_point() + geom_line() +
+    xlab("Date")+
+ theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))+geom_vline(xintercept=as.POSIXct("2021-08-18 09:00:00", tz="HST"), 
+                color = "blue", size=1, linetype=3)+ylab("Rainfall (mm)")
+
+Long_Rainfall
+
+```
+
+##get rainfall to match the length of the waves and wind dataframes by joining them 
+```{r}
+wind_waves_rain=full_join(wind_waves, rain, by="date.time")
+Aug_rain=wind_waves_rain%>%dplyr::filter(date.time > as.POSIXct("2021-07-01 01:00:00", tz="HST"))%>%dplyr::filter(date.time < as.POSIXct("2021-08-31 01:00:00", tz="HST"))
+
+
+
+Rainfall=ggplot(data=Aug_rain, aes(x=date.time, y = rainfall_mm)) +
+          geom_point(color="#d3d3d3") + geom_line(color="#d3d3d3") +
+    xlab("Date")+
+ theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))+geom_vline(xintercept=as.POSIXct("2021-08-18 09:00:00", tz="HST"), 
+                color = "blue", size=1, linetype=3)+ylab("Rainfall (mm)")
+
+Rainfall
+ggsave("Figures_Tables/rain_conditions.png")
+ggsave("Figures_Tables/rain_conditions.svg")
+
+
+
+HADS_rain=rain%>%dplyr::filter(date.time > as.POSIXct("2021-08-16 01:00:00", tz="HST"))%>%dplyr::filter(date.time < as.POSIXct("2021-08-21 12:00:00", tz="HST"))
+
+max(HADS_rain$rainfall_mm)
+
+HADS_Rainfall=ggplot(data=HADS_rain, aes(x=date.time, y = rainfall_mm)) +
+          geom_point(color="#d3d3d3") + geom_line(color="#d3d3d3") +
+    xlab("Date")+
+ theme(axis.text=element_text(size=12),axis.title=element_text(size=12,face="bold"), legend.text=element_text(size=12), panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))+geom_vline(xintercept=as.POSIXct("2021-08-18 09:00:00", tz="HST"), 
+                color = "blue", size=1, linetype=3)+ylab("Rainfall (mm)")
+
+HADS_Rainfall
+```
+
+Fig. S1. Weather and oceanographic characteristics leading up to the Hawaiʻi Diel Sampling (HADS). 
+
+```{r}
+
+plot_grid(wave_plot, wind_plot, Rainfall, cols=1,align = c( "hv"))
+ggsave("Figures_Tables/Fig_S1_rain.png", height=9, width=6.5)
+ggsave("Figures_Tables/Fig_S1_rain.svg", height=9, width=6.5)
+
+
+
+plot_grid(wave_plot, wind_plot, Rainfall, Tidal, cols=1,align = c( "hv"))
+ggsave("Figures_Tables/Fig_S1_rain_tidal.png", height=14, width=6.5)
+ggsave("Figures_Tables/Fig_S1_rain_tidal.svg", height=14, width=6.5)
+
+```
+###temp and sampling points
+```{r}
+
+#mokh1h=read.csv("KBay_mokh1h2021.csv", header=TRUE, fill=TRUE)
+#mokh1h$date.time=as.POSIXct(paste(mokh1h$Date, mokh1h$Time), format="%Y-%m-%d %H:%M:%S")
+#view(mokh1h)
+
+#off_buoy=read.csv("offshore_51207h2021.csv", header=TRUE, fill=TRUE)
+#off_buoy$date.time=as.POSIXct(paste(off_buoy$Date, off_buoy$Time), format="%Y-%m-%d %H:%M:%S")
+
+Temp_mokh1h=mokh1h%>%dplyr::select(date.time, Site, Temp)
+Temp_off_buoy=off_buoy%>%dplyr::select(date.time, Site, Temp)
+
+Temp_mokh1h$Environment=Temp_mokh1h$Site
+Temp_mokh1h$Environment[Temp_mokh1h$Environment %in% "mokh1h"] <- "Coastal"
+
+Temp_off_buoy$Environment=Temp_off_buoy$Site
+Temp_off_buoy$Environment[Temp_off_buoy$Environment %in% "51207h"] <- "Offshore"
+
+Temp_mokh1h$Type=Temp_mokh1h$buoy
+Temp_off_buoy$Type=Temp_off_buoy$buoy
+
+###bring in more info
+#Enviro=read.csv("/Users/sarahtucker/Documents/KByt/Diel_tRNA/Diel_HI_Environmental_data_plus_additional_June2024.csv", header=TRUE, fill=TRUE)
+#names(Enviro)
+
+#Enviro$date.time=as.POSIXct(paste(Enviro$Date, Enviro$Time), format="%Y-%m-%d %H:%M:%S", tz="HST")
+#Enviro$date.time
+
+
+###
+Enviro=read.csv("/Users/sarahtucker/Documents/KByt/Diel_tRNA/Diel_HI_Environmental_data_plus_additional_June2024.csv", header=TRUE, fill=TRUE)
+
+
+Enviro=Enviro%>%dplyr::mutate(date.time2=make_datetime(
+  year = YY,
+  month = MM,
+  day = DD,
+  hour = hh,
+  min = mm,
+  tz = "HST"
+))
+
+
+Enviro$date.time2 <- as.POSIXct(Enviro$date.time2, format = '%Y-%m-%dT%H:%M:%S', tz = 'HST')
+#Enviro$Time <- format(as.POSIXct(Enviro$date.time),format = "%H:%M:%S", tz = 'HST')
+Enviro$date.time2
+
+Enviro_no_additional=Enviro%>%subset(Category=="Diel")
+STO1=Enviro_no_additional%>%subset(Site=="STO1")
+HP1=Enviro_no_additional%>%subset(Site=="HP1")
+
+
+#write.csv(Enviro, "Diel_HI_Environmental_data_Mar132024.csv")
+
+
+Temp_Enviro=Enviro%>%dplyr::select(date.time2, Site, Temp)
+
+Temp_Enviro$Environment=Temp_Enviro$Site
+Temp_Enviro$Environment[Temp_Enviro$Environment %in% "HP1"] <- "Coastal"
+Temp_Enviro$Environment[Temp_Enviro$Environment %in% "STO1"] <- "Offshore"
+
+Temp_Enviro$Type=Temp_Enviro$YSI
+Temp_Enviro=Temp_Enviro%>%dplyr::rename("date.time"="date.time2")
+
+
+full_framec=rbind(Temp_mokh1h,Temp_off_buoy)
+full_framed=rbind(full_framec, Temp_Enviro)
+#write.csv(full_framed, "Buoy_plus_diel_WTemp.csv")
+
+#####slightly less long term
+Aug_Temp_mokh1h=Temp_mokh1h%>%dplyr::filter(date.time > as.POSIXct("2020-08-01 01:00:00", tz="HST"))
+
+Aug_Temp_off_buoy=Temp_off_buoy%>%dplyr::filter(date.time > as.POSIXct("2020-08-01 01:00:00", tz="HST"))
+
+
+Aug_Temp_Enviro=Temp_Enviro%>%dplyr::filter(date.time > as.POSIXct("2020-08-01 01:00:00", tz="HST"))
+
+
+full_frame=rbind(Aug_Temp_mokh1h, Aug_Temp_off_buoy)
+full_frame2=rbind(full_frame, Aug_Temp_Enviro)
+
+buoy_site=c("HP1"="orange", "STO1"="purple", "51207h"="#605F5E", "mokh1h"="gray")
+
+temp=ggplot(data=full_frame2, aes(x=date.time, y = Temp, group=Site, color=Site)) +
+          geom_point(aes(alpha=0.4)) + geom_line(aes(alpha=0.4)) +
+    xlab("Date")+
+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color="black", fill = NA,size = 0.5))+scale_color_manual(values=buoy_site)+ theme(legend.position = "none")+ylab("Temperature (C)")+xlab("")
+
+temp
+ggsave("temp_buoy_Figure1c.svg", height=4, width=6)
+
+```
+
+
+###lets plot out the maps of the Hawaiian Islands, Oahu, and KBay
+```{r}
+
+library(geojsonio)
+require(sf)
+
+library(ggspatial)
+library(marmap)
+citation("marmap")
+spdf <- geojson_read("Coastline.geojson",  what = "sp")
+
+map <- read_sf("Coastline.geojson")
+
+sites <- sf::st_as_sf(data.frame(longitude = c(-158.0), latitude = c(22.45)), coords = c("longitude", "latitude"), crs = 4326, 
+agr = "constant")
+
+pts_KByT_not_diel = data.frame(
+  lon = c(-157.83585,
+-157.81135,
+-157.8332833,
+-157.8117167,
+-157.7979,
+-157.7773667,
+-157.77752,
+-157.7932167),
+  lat = c(21.46765,
+21.45705,
+21.49048333,
+21.5147,
+21.526,
+21.43635,
+21.4691667,
+21.44983333)
+)
+
+
+pts_diel = data.frame(
+  lon = c(
+-157.80331,
+-157.7663),
+  lat = c(
+21.43688,
+21.4829)
+)
+
+
+
+
+###KBay
+b = getNOAA.bathy(lon1 = -157.7, lon2 = -157.9, lat1 = 21.4, lat2 = 21.64, 
+                  resolution = 0.1)
+bf = fortify.bathy(b)
+names(bf)
+head(bf)
+bf_depth=bf%>%dplyr::filter(z<0.05)%>%dplyr::filter(z>-1500)
+# coord_sf(xlim = c(-157.72, -157.87), ylim = c(21.4, 21.54), expand = FALSE
+
+hawaii_zoom  <- ggplot(data = map) +
+     geom_sf(fill = "#f3eddd") +
+     geom_sf(data = sites, size = 2, shape = 24, fill = "#6495ED")+coord_sf(xlim = c(-157.70, -157.87), ylim = c(21.4, 21.58), expand = FALSE)+
+  annotation_scale(line_width = 0.2)+
+     theme(panel.grid.major = element_blank(), panel.background = element_rect(fill = "#d4f1f4"), 
+         panel.border = element_rect(fill = NA, color="black", size = 0.5))+theme(axis.text.y = element_text(angle = 90, vjust = 0, hjust = 0))+
+  geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-5),
+               size=c(0.2),
+               colour="#1279F2", linetype=2)+
+  geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-10),
+               size=c(0.2),
+               colour="#1279F2")+ geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-20),
+               size=c(0.2),
+               colour="#1279F2")+geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-30),
+               size=c(0.2),
+               colour="#1279F2")+ geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-40),
+               size=c(0.2),
+               colour="#1279F2")+ geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-50),
+               size=c(0.4),
+               colour="#1279F2")+ geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-100),
+               size=c(0.4),
+               colour="#1279F2")+ geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-150),
+               size=c(0.4),
+               colour="#1279F2")+ geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-200),
+               size=c(0.4),
+               colour="#1279F2")+ geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-250),
+               size=c(0.4),
+               colour="#1279F2")+ geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-300),
+               size=c(0.4),
+               colour="#1279F2")+ geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-350),
+               size=c(0.4),
+               colour="#1279F2")+ geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-400),
+               size=c(0.4),
+               colour="#1279F2")+geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-450),
+               size=c(0.4),
+               colour="#1279F2")+geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-500),
+               size=c(0.4),
+               colour="#1279F2")+geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-550),
+               size=c(0.4),
+               colour="#1279F2")+geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-600),
+               size=c(0.4),
+               colour="#1279F2")+geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-650),
+               size=c(0.4),
+               colour="#1279F2")+geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-700),
+               size=c(0.4),
+               colour="#1279F2")+geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-750),
+               size=c(0.4),
+               colour="#1279F2")+geom_contour(data = bf, 
+               aes(x=x, y=y, z=z),
+               breaks=c(-800),
+               size=c(0.4),
+               colour="#1279F2")+ylab("")+xlab("")+geom_point(data = pts_diel, aes(x = lon, y = lat),
+             colour = "black", fill = "#ff9a00", 
+             stroke = .5, size = 2, 
+             alpha = 1, shape = 21)+ylab("")+xlab("")+geom_point(data = pts_KByT_not_diel, aes(x = lon, y = lat), fill = "darkgrey", colour = "black",
+             stroke = .5, size = 2, 
+             alpha = 0.5, shape = 21)+ylab("")+xlab("")
+
+hawaii_zoom
+ggsave("Diel_sites_blue_2.svg")
+
+```
+
+
+
+```{r}
+#https://opendata.hawaii.gov/mk/dataset/coastline1
+library(geojsonio)
+require(sf)
+#library(rgdal)
+
+
+map <- read_sf("Coastline.geojson")
+
+sites <- sf::st_as_sf(data.frame(longitude = c(-158.0), latitude = c(22.45)), coords = c("longitude", "latitude"), crs = 4326, 
+agr = "constant")
+
+#library(ggsn)
+
+
+##full islands 
+
+hawaii  <- ggplot(data = map) +
+     geom_sf(fill = "#f3eddd") +
+     coord_sf(xlim = c(-154.5, -160.5), ylim = c(18.4, 22.44), expand = FALSE) +
+     theme(panel.grid.major = element_blank(), panel.background = element_rect(fill = "#FFFFFF"), 
+         panel.border = element_rect(fill = NA))+ annotation_scale(line_width = 0.2)
+hawaii
+ggsave("output/Hawaii_Islands_Oahu_scale_test.svg", width=3.0, height=2.5 )
+
+
+##just Oahu
+spdf <- geojson_read("Coastline.geojson",  what = "sp")
+
+map <- read_sf("Coastline.geojson")
+
+sites <- sf::st_as_sf(data.frame(longitude = c(-158.0), latitude = c(22.45)), coords = c("longitude", "latitude"), crs = 4326, 
+agr = "constant")
+
+
+###KBay
+oahu_zoom  <- ggplot(data = map) +
+     geom_sf(fill = "#f3eddd") +
+     geom_sf(data = sites, size = 2, shape = 24, fill = "#6495ED")+coord_sf(xlim = c(-157.5, -158.3), ylim = c(21.1, 21.9), expand = FALSE)+
+  annotation_scale(line_width = 0.2)+
+     theme(panel.grid.major = element_blank(), panel.background = element_rect(fill = "#FFFFFF"), 
+         panel.border = element_rect(fill = NA, color="black", size = 0.5))+theme(axis.text.y = element_text(angle = 90, vjust = 0, hjust = 0))
+oahu_zoom 
+ggsave("output/oahu_zoom_test.svg", width=1, height=1 )
+
+```
+
+
+####Figure 2a
+```{r}
+
+Enviro=read.csv("/Users/sarahtucker/Documents/KByt/Diel_tRNA/Diel_HI_Environmental_data_plus_additional_June2024.csv", header=TRUE, fill=TRUE)
+Enviro_no_additional=Enviro%>%subset(Category=="Diel")
+
+
+chla=ggplot(data=Enviro_no_additional, aes(x=Site, y = chla, fill=Site)) +
+          geom_boxplot(outlier.shape = NA) + geom_jitter(size=0.5)+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))+scale_fill_manual(values=c("orange", "purple"))+ylab("")+ theme(legend.position = "none")+xlab("")
+chla
+ggsave("Figures_Tables/chla_box_label.svg")
+
+names(Enviro_no_additional)
+
+Silicate=ggplot(data=Enviro_no_additional, aes(x=Site, y = Silicate.uM, fill=Site)) +geom_boxplot(outlier.shape = NA) + geom_jitter(size=0.5)+theme( panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))+scale_fill_manual(values=c("orange", "purple"))+ylab("")+ theme(legend.position = "none")+xlab("")
+Silicate
+
+
+
+Pro=ggplot(data=Enviro_no_additional, aes(x=Site, y = PRO.mL, fill=Site)) +geom_boxplot(outlier.shape = NA) + geom_jitter(size=0.5)+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))+scale_fill_manual(values=c("orange", "purple"))+ylab("")+ theme(legend.position = "none")+xlab("")
+Pro
+
+
+Syn=ggplot(data=Enviro_no_additional, aes(x=Site, y = SYN.mL, fill=Site)) +geom_boxplot(outlier.shape = NA) + geom_jitter(size=0.5)+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))+scale_fill_manual(values=c("orange", "purple"))+ylab("")+ theme(legend.position = "none")+xlab("")
+Syn
+
+plot_grid(chla, Silicate, Syn, Pro, cols=4, align="hv")
+ggsave("Figures_Tables/figure2a_box_plot.png", width=6.5, height=2)
+ggsave("Figures_Tables/figure2a_box_plot.svg", width=6.5, height=2)
+
+```
+
+
+##Figure 2c,e
+
+```{r}
+STO1=Enviro_no_additional%>%subset(Site=="STO1")
+
+chla_diel_STO1=ggplot(STO1, aes(x=Time_Characters, y=chla, color=Site, group=Site))+geom_point(size=0.5)+ geom_smooth(se=TRUE,method = "loess", size=0.5)+theme(axis.text.x = element_blank())+ylab("")+xlab("")+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1))+ theme(legend.position = "none")+scale_color_manual(values=c("purple"))
+chla_diel_STO1
+
+chla_diel_STO1=chla_diel_STO1+annotate("rect", xmin = "H0600", xmax = "H1800", ymin = -Inf, ymax = Inf,
+             alpha = 0.1, fill="yellow")+theme(axis.text.x=element_text(size=12))
+chla_diel_STO1=chla_diel_STO1+scale_x_discrete(labels = c("00:00", "06:00", "12:00","18:00"), breaks=c("H0000","H0600","H1200", "H1800"))
+chla_diel_STO1
+ggsave("Figures_Tables/STO1_Chla_diel_vertical.png", height=2, width=1.5)
+
+
+
+
+HP1=Enviro_no_additional%>%subset(Site=="HP1")
+chla_diel_HP1=ggplot(HP1, aes(x=Time_Characters, y=chla, color=Site, group=Site))+geom_point(size=0.5)+ geom_smooth(se=TRUE,method = "loess", size=0.5)+theme(axis.text.x = element_blank())+ylab("")+xlab("")+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",
+                                    fill = NA,size = 1))+ theme(legend.position = "none")+scale_color_manual(values=c("orange"))
+chla_diel_HP1
+chla_diel_HP1=chla_diel_HP1+annotate("rect", xmin = "H0600", xmax = "H1800", ymin = -Inf, ymax = Inf,
+             alpha = 0.1, fill="yellow")+theme(axis.text.x=element_text(size=12))
+chla_diel_HP1
+chla_diel_HP1=chla_diel_HP1+scale_x_discrete(labels = c("00:00", "06:00", "12:00","18:00"), breaks=c("H0000","H0600","H1200", "H1800"))
+chla_diel_HP1
+ggsave("Figures_Tables/HP1_Chla_diel_vertical.png", height=2, width=1.5)
+
+```
+
+
+##Figure 2b,d
+```{r}
+Enviro=read.csv("/Users/sarahtucker/Documents/KByt/Diel_tRNA/Diel_HI_Environmental_data_plus_additional_June2024.csv", header=TRUE, fill=TRUE)
+Enviro_no_additional=Enviro%>%subset(Category=="Diel")
+
+
+Enviro_no_additional_2=Enviro_no_additional%>%tidyr::drop_na(chla)
+Enviro_no_additional_2=Enviro_no_additional_2%>%tidyr::drop_na(PRO.mL)
+Chla_STO1=subset(Enviro_no_additional_2, Site=="STO1")
+
+
+scaleFactor <-  max(Chla_STO1$PRO.mL)/max(Chla_STO1$chla) 
+chlasto1=c("purple")
+full_time_series_sto1=ggplot(data=Chla_STO1, aes(x=sampling.event)) +
+          geom_point(aes(y = chla),color=chlasto1, size=0.5) + geom_line(aes(y = chla), color=chlasto1) +
+    xlab("")+
+ theme( panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))+geom_line(aes(y = (PRO.mL)/scaleFactor),  color="#6dbe6f")+geom_point(aes(y = (PRO.mL)/scaleFactor),color="#6dbe6f", size=0.5)+
+  scale_y_continuous(name = "Chlorophyll a",
+                     sec.axis = sec_axis(~ .*scaleFactor,
+                                         name = "Prochlorococcus"))+theme(axis.text.x = element_blank())
+full_time_series_sto1
+
+full_time_series_sto1=full_time_series_sto1+annotate("rect", xmin = 1, xmax = 7, ymin = -Inf, ymax = Inf,
+             alpha = 0.1, fill="yellow")
+full_time_series_sto1=full_time_series_sto1+annotate("rect", xmin = 15, xmax = 23, ymin = -Inf, ymax = Inf,
+             alpha = 0.1, fill="yellow")+theme(axis.text.x=element_text(size=12))+ scale_x_continuous(breaks=seq(1, 33, by = 1))
+full_time_series_sto1=full_time_series_sto1+annotate("rect", xmin = 31, xmax = 33, ymin = -Inf, ymax = Inf,alpha = 0.1, fill="yellow")
+full_time_series_sto1=full_time_series_sto1+scale_x_continuous(labels = c("9:00", "15:00", "21:00", "3:00", "9:00", "15:00","21:00","3:00", "9:00"), breaks=c(1,5,9,13,17,21,25,29,33))
+full_time_series_sto1
+
+plot_grid(full_time_series_sto1,chla_diel_STO1, ncol=2, rel_widths=c(2.4,1), rel_heights = 1)
+ggsave("Figures_Tables/Figure_2c_v2.png", height=2, width=6.5)
+ggsave("Figures_Tables/Figure_2c_v2.svg", height=2, width=6.5)
+
+
+#####Hp1
+Enviro_no_additional_2=Enviro_no_additional%>%tidyr::drop_na(chla)
+Enviro_no_additional_2=Enviro_no_additional_2%>%tidyr::drop_na(SYN.mL)
+Chla_HP1=subset(Enviro_no_additional_2, Site=="HP1")
+
+
+
+scaleFactor <-  max(Chla_HP1$SYN.mL)/max(Chla_HP1$chla) 
+chlahp1=c("orange")
+full_time_series_HP1=ggplot(data=Chla_HP1, aes(x=sampling.event)) +
+          geom_point(aes(y = chla),color=chlahp1, size=0.5) + geom_line(aes(y = chla), color=chlahp1) +
+    xlab("")+
+ theme( panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(),panel.border = element_rect(color = "black",fill = NA,size = 1))+geom_line(aes(y = (SYN.mL)/scaleFactor),  color="#1a857d")+geom_point(aes(y = (SYN.mL)/scaleFactor),color="#1a857d", size=0.5)+
+  scale_y_continuous(name = "Chlorophyll a",
+                     sec.axis = sec_axis(~ .*scaleFactor,
+                                         name = "Synechococcus"))+theme(axis.text.x = element_blank())
+full_time_series_HP1=full_time_series_HP1+annotate("rect", xmin = 1, xmax = 7, ymin = -Inf, ymax = Inf,
+             alpha = 0.1, fill="yellow")
+full_time_series_HP1=full_time_series_HP1+annotate("rect", xmin = 15, xmax = 23, ymin = -Inf, ymax = Inf,
+             alpha = 0.1, fill="yellow")+theme(axis.text.x=element_text(size=12))+ scale_x_continuous(breaks=seq(1, 33, by = 1))
+full_time_series_HP1=full_time_series_HP1+annotate("rect", xmin = 31, xmax = 33, ymin = -Inf, ymax = Inf,alpha = 0.1, fill="yellow")
+full_time_series_HP1=full_time_series_HP1+scale_x_continuous(labels = c("9:00", "15:00", "21:00", "3:00", "9:00", "15:00","21:00","3:00", "9:00"), breaks=c(1,5,9,13,17,21,25,29,33))
+full_time_series_HP1
+plot_grid(full_time_series_HP1,chla_diel_HP1, ncol=2, rel_widths=c(2.4,1), rel_heights = 1)
+ggsave("Figures_Tables/Figure_2b_v2.png", height=2, width=6.5)
+ggsave("Figures_Tables/Figure_2b_v2.svg", height=2, width=6.5)
+
+
+
+```
+
+
+###getting read for NCBI submission
+```{r}
+Enviro_NCBI=read.csv("/Users/sarahtucker/Documents/KByt/Diel_tRNA/Diel_HI_Environmental_data_plus_additional_June2024.csv", header=TRUE, fill=TRUE)
+
+names(Enviro_NCBI)
+
+Enviro_NCBI$organism="metagenome"
+Enviro_NCBI$env_broad_scale="surface seawater"
+Enviro_NCBI$env_local_scale=Enviro_NCBI$Site
+Enviro_NCBI$env_local_scale[Enviro_NCBI$env_local_scale %in% "HP1"] <- "Nearshore"
+Enviro_NCBI$env_local_scale[Enviro_NCBI$env_local_scale %in% "STO1"] <- "Offshore"
+Enviro_NCBI$geo_loc_name="Pacific Ocean: Oahu, Kaneohe Bay"
+Enviro_NCBI$lat_lon=Enviro_NCBI$Site
+Enviro_NCBI$lat_lon[Enviro_NCBI$lat_lon %in% "HP1"] <- "21.43688 N 157.80331 W"
+Enviro_NCBI$lat_lon[Enviro_NCBI$lat_lon %in% "STO1"] <- "21.4829 N 157.7663 W"
+Enviro_NCBI$env_medium="seawater"
+
+Enviro_NCBI2=Enviro_NCBI%>%dplyr::select("organism", "Date", "Depth", "env_broad_scale", "env_local_scale","env_medium","geo_loc_name", "lat_lon", "Site","PAR", "chla","pH", "Salinity","Temp", "PAR","Time.sampled","PRO.mL","SYN.mL","PEUK.mL","HBACT.mL","Phosphate.uM","Silicate.uM","NitrateNitrite.uM","Ammonia.uM","DOC.uM", "TN.uM","HADS_Universal_Sample_ID")
+names(Enviro_NCBI2)
+write.csv(Enviro_NCBI2, "/Users/sarahtucker/Documents/KByt/Diel_tRNA/Diel_Data_Paper/sample_files/Enviro_Diel_NCBI_Dec222024.csv")
+``````
+
+
+
+```{r}
+ncbi_sra=read.delim2("/Users/sarahtucker/Documents/KByt/Diel_tRNA/Diel_Data_Paper/sample_files/from_NCBI.txt")
+mtx=read.delim2("/Users/sarahtucker/Documents/KByt/Diel_tRNA/Diel_Data_Paper/sample_files/check_mtx.txt")
+
+check=left_join(mtx,ncbi_sra,  by="Universal_ID")
+names(check)
+all(check$test == check$biosample_accession)
+
+```
+
+
+
+####
+short read MGX co-assembly 
+###
+
+
+###
+recover Meren's script if possible
+##
+```{r}
+clusterize "anvi-gen-contigs-database -f xHP1-contigs.fa -o xHP1-coassembly-CONTIGS.db" -j xHP1_contigs --num-nodes 1 --num-tasks-per-node 80
+clusterize "anvi-run-hmms -c xHP1-coassembly-CONTIGS.db" -j xHP1_contigs --num-nodes 1 --num-tasks-per-node 80
+clusterize "anvi-run-ncbi-cogs -c xHP1-coassembly-CONTIGS.db" -j xHP1_cogs --num-nodes 1 --num-tasks-per-node 80
+clusterize "anvi-run-scg-taxonomy -c xHP1-coassembly-CONTIGS.db -T 80" -j xHP1_tax --num-nodes 1 --num-tasks-per-node 80
+
+```
+
+
+```{r}
+###
+bowtie2-build xHP1-contigs.fa xHP1_MAPPING/xHP1-coassembly
+
+while read sample r1 r2;
+do
+ if [ "$sample" == "sample" ]; then continue; fi
+    # do the bowtie mapping to get the SAM file:
+    bowtie2 --threads 80 \
+            -x xHP1-coassembly \
+            -1 $r1 \
+            -2 $r2 \
+            --no-unal \
+            -S $sample.sam
+    # covert the resulting SAM file to a BAM file:
+    samtools view -F 4 -bS $sample.sam > $sample-RAW.bam
+
+    # sort and index the BAM file:
+    samtools sort $sample-RAW.bam -o $sample.bam
+    samtools index $sample.bam
+
+    # remove temporary files:
+    rm $sample.sam $sample-RAW.bam
+done< <(tail -n+2 /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/samples_MTX_MGX_Diel.txt)
+##save above as bowtie.sh
+chmod u+x bowtie_xHP1.sh
+clusterize "./bowtie_xHP1.sh" -n 80 -o bowtie_xHP1.txt -j bowtie_xHP1
+```
+
+
+```{r}
+##profile
+for sample in `awk '{print $1}' /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/samples_MTX_MGX_Diel.txt`
+do
+    if [ "$sample" == "sample" ]; then continue; fi
+
+    anvi-profile -c /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1-coassembly-CONTIGS.db \
+                 -i $sample.bam \
+                 -M 100 \
+                 --num-threads 80 \
+                 -o $sample
+done
+chmod u+x xHP1_profile.sh
+
+
+clusterize "./xHP1_profile.sh" -n 80 -o xHP1_profile.txt -j xHP1_profile -t 20-00:00:03
+
+
+clusterize "anvi-merge */PROFILE.db -o xHP1-coassembly-MERGED -c /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1-coassembly-CONTIGS.db" -o xHP1_merge2.txt -j xHP1_merge2 -M 19250 -n 20
+
+#clusterize "anvi-cluster-contigs -p xHP1-coassembly-MERGED/PROFILE.db -c /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1-coassembly-CONTIGS.db -C CONCOCT --driver concoct -T 20 --just-do-it" -n 20 -o xHP1_concoct.txt -j xHP1_concoct
+```
+
+
+```{r}
+anvi-db-info xHP1-coassembly-MERGED/PROFILE.db
+conda activate metabat2
+#Generate a depth file from BAM files
+clusterize -n 80 -j xHP1_co_depths_v3 "jgi_summarize_bam_contig_depths --outputDepth /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1_MAPPING/xHP1_depth_both_sites.txt --pairedContigs /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1_MAPPING/xHP1_paired_both_sites.txt  HADS_20210818_H0900_MGX_xHP1_002.bam HADS_20210818_H1030_MGX_xHP1_004.bam HADS_20210818_H1200_MGX_xHP1_006.bam HADS_20210818_H1330_MGX_xHP1_008.bam HADS_20210818_H1500_MGX_xHP1_010.bam HADS_20210818_H1630_MGX_xHP1_012.bam HADS_20210818_H1800_MGX_xHP1_014.bam HADS_20210818_H1930_MGX_xHP1_016.bam HADS_20210818_H2100_MGX_xHP1_018.bam HADS_20210818_H2230_MGX_xHP1_020.bam HADS_20210819_H0000_MGX_xHP1_022.bam HADS_20210819_H0130_MGX_xHP1_024.bam HADS_20210819_H0300_MGX_xHP1_026.bam HADS_20210819_H0430_MGX_xHP1_028.bam HADS_20210819_H0600_MGX_xHP1_030.bam HADS_20210819_H0730_MGX_xHP1_032.bam HADS_20210819_H0900_MGX_xHP1_034.bam HADS_20210819_H1030_MGX_xHP1_036.bam HADS_20210819_H1200_MGX_xHP1_038.bam HADS_20210819_H1330_MGX_xHP1_040.bam HADS_20210819_H1500_MGX_xHP1_042.bam HADS_20210819_H1630_MGX_xHP1_044.bam HADS_20210819_H1800_MGX_xHP1_046.bam HADS_20210819_H1930_MGX_xHP1_048.bam HADS_20210819_H2100_MGX_xHP1_050.bam HADS_20210819_H2230_MGX_xHP1_052.bam HADS_20210820_H0000_MGX_xHP1_054.bam HADS_20210820_H0300_MGX_xHP1_058.bam HADS_20210820_H0430_MGX_xHP1_060.bam HADS_20210820_H0600_MGX_xHP1_062.bam HADS_20210820_H0730_MGX_xHP1_064.bam HADS_20210820_H0900_MGX_xHP1_066.bam HADS_20210818_H0900_MGX_STO1_001.bam HADS_20210818_H1030_MGX_STO1_003.bam HADS_20210818_H1200_MGX_STO1_005.bam HADS_20210818_H1330_MGX_STO1_007.bam HADS_20210818_H1500_MGX_STO1_009.bam HADS_20210818_H1630_MGX_STO1_011.bam HADS_20210818_H1800_MGX_STO1_013.bam HADS_20210818_H1930_MGX_STO1_015.bam HADS_20210818_H2100_MGX_STO1_017.bam HADS_20210818_H2230_MGX_STO1_019.bam HADS_20210819_H0000_MGX_STO1_021.bam HADS_20210819_H0130_MGX_STO1_023.bam HADS_20210819_H0300_MGX_STO1_025.bam HADS_20210819_H0430_MGX_STO1_027.bam HADS_20210819_H0600_MGX_STO1_029.bam HADS_20210819_H0730_MGX_STO1_031.bam HADS_20210819_H0900_MGX_STO1_033.bam HADS_20210819_H1030_MGX_STO1_035.bam HADS_20210819_H1200_MGX_STO1_037.bam HADS_20210819_H1330_MGX_STO1_039.bam HADS_20210819_H1500_MGX_STO1_041.bam HADS_20210819_H1630_MGX_STO1_043.bam HADS_20210819_H1800_MGX_STO1_045.bam HADS_20210819_H1930_MGX_STO1_047.bam HADS_20210819_H2100_MGX_STO1_049.bam HADS_20210819_H2230_MGX_STO1_051.bam HADS_20210820_H0000_MGX_STO1_053.bam HADS_20210820_H0130_MGX_STO1_055.bam HADS_20210820_H0300_MGX_STO1_057.bam HADS_20210820_H0430_MGX_STO1_059.bam HADS_20210820_H0600_MGX_STO1_061.bam HADS_20210820_H0730_MGX_STO1_063.bam HADS_20210820_H0900_MGX_STO1_065.bam"
+
+
+clusterize -n 80 -j binning_xHP1_Feb2024 "metabat2 -t 80 -i /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1-contigs.fa -a /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1_MAPPING/xHP1_depth_both_sites.txt -o /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1_Metabat2_bins/xHP1_bin -v"
+
+
+##get bins into a format for anvio 
+cd /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1_Metabat2_bins/
+#(https://groups.google.com/g/anvio/c/DWO8fDQ_g7M)
+nano mazbin2anvio.sh  
+
+#!/bin/bash
+# A simple script to convert maxbin results to anvio
+FILES=$(find *.fa)
+for f in $FILES; do
+ NAME=$(basename $f .fa)
+ grep ">" $f | sed 's/>//' | sed -e "s/$/\t$NAME/" | sed 's/\./_/' >> xHP1_metabat4anvio_v2.txt
+done
+
+
+anvi-import-collection /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1_Metabat2_bins/xHP1_metabat4anvio_v2.txt -p /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1_MAPPING/xHP1-coassembly-MERGED/PROFILE.db -c /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1-coassembly-CONTIGS.db -C Bins_Metabat2 --contigs-mode
+
+mkdir /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1_Metabat2_bins/checkm/ 
+clusterize "checkm lineage_wf /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1_Metabat2_bins/ /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1_Metabat2_bins/checkm/ -x fa -t 80" -j checkm_xHP1_v2 -n 80
+
+clusterize "anvi-estimate-scg-taxonomy -o xHP1_metabat2_taxonomy_v2.txt -p /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1_MAPPING/xHP1-coassembly-MERGED/PROFILE.db -c /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/xHP1-coassembly-CONTIGS.db -C Bins_Metabat2"
+
+```
+
+```{r}
+clusterize "checkm lineage_wf /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/STO1_Metabat2_bins/ /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/MGX/02-COASSEMBLY-OF-STATIONS/STO1_Metabat2_bins/checkm/ -x fa -t 80" -j checkm_STO1_v2 -n 80
+```
+
+
+##Quick synopsis of bins 
+```{r}
+tax_xHP1_short=read.delim2("/Users/sarahtucker/Documents/KByt/Diel_tRNA/MGX/xHP1_metabat2_taxonomy_v2.txt")
+comp_xHP1_short=read.delim2("/Users/sarahtucker/Documents/KByt/Diel_tRNA/MGX/checkm_xHP1_updated.txt")
+
+
+tax_comp_xHP1_short=left_join(tax_xHP1_short, comp_xHP1_short, by="bin_name")
+
+tax_comp_xHP1_short$quality_completion=""
+
+tax_comp_xHP1_short$quality_completion<- as.factor(ifelse(as.numeric(tax_comp_xHP1_short$Completeness)>90, 'High_Comp', 
+                     ifelse(as.numeric(tax_comp_xHP1_short$Completeness)>70, 'Medium_Comp', 'Low_Comp'))) 
+
+tax_comp_xHP1_short$quality_contam=""
+tax_comp_xHP1_short$quality_contam<- as.factor(ifelse(as.numeric(tax_comp_xHP1_short$Contamination)<5, 'Low_Contam', 
+                     ifelse(as.numeric(tax_comp_xHP1_short$Contamination)<10, 'Medium_Contam', 'High_Contam'))) 
+
+tax_comp_xHP1_short$MAG_Quality <- paste(tax_comp_xHP1_short$quality_completion, "_", tax_comp_xHP1_short$quality_contam)
+unique(tax_comp_xHP1_short$MAG_Quality)
+
+tax_comp_xHP1_short$MAG_Quality<- gsub('High_Comp _ Medium_Contam', 'Medium', tax_comp_xHP1_short$MAG_Quality)
+tax_comp_xHP1_short$MAG_Quality<- gsub('Medium_Comp _ Low_Contam', 'Medium', tax_comp_xHP1_short$MAG_Quality)
+tax_comp_xHP1_short$MAG_Quality<- gsub('Medium_Comp _ Medium_Contam', 'Medium', tax_comp_xHP1_short$MAG_Quality)
+tax_comp_xHP1_short$MAG_Quality<- gsub('High_Comp _ Low_Contam', 'High', tax_comp_xHP1_short$MAG_Quality)
+tax_comp_xHP1_short$MAG_Quality<- gsub('Low_Comp _ Low_Contam', 'Low', tax_comp_xHP1_short$MAG_Quality)
+tax_comp_xHP1_short$MAG_Quality<- gsub('Low_Comp _ Medium_Contam', 'Low', tax_comp_xHP1_short$MAG_Quality)
+tax_comp_xHP1_short$MAG_Quality<- gsub('Medium_Comp _ High_Contam', 'Low', tax_comp_xHP1_short$MAG_Quality)
+tax_comp_xHP1_short$MAG_Quality<- gsub('Medium_Comp _ High_Contam', 'Low', tax_comp_xHP1_short$MAG_Quality)
+tax_comp_xHP1_short$MAG_Quality<- gsub('Low_Comp _ High_Contam', 'Low', tax_comp_xHP1_short$MAG_Quality)
+tax_comp_xHP1_short$MAG_Quality<- gsub('High_Comp _ High_Contam', 'Low', tax_comp_xHP1_short$MAG_Quality)
+unique(tax_comp_xHP1_short$MAG_Quality)
+summary_xHP1_short=tax_comp_xHP1_short%>%dplyr::group_by(MAG_Quality)%>%dplyr::summarise(n = n())
+write.csv(tax_comp_xHP1_short,"tax_comp_xHP1_short.csv")
+
+tax_comp_xHP1_short_MQ_HQ=tax_comp_xHP1_short%>%subset(MAG_Quality !="Low")
+names(tax_comp_xHP1_short_MQ_HQ)
+tax_comp_xHP1_short_MQ_HQ$Assembly="xHP1_MGX_short_read"
+tax_comp_xHP1_short_MQ_HQ=tax_comp_xHP1_short_MQ_HQ%>%select("Assembly","bin_name","total_scgs","supporting_scgs","t_domain", "t_phylum", "t_class","t_order","t_family" ,"t_genus","t_species","Completeness","Contamination","MAG_Quality")
+
+tax_comp_xHP1_short_MQ_HQ=tax_comp_xHP1_short_MQ_HQ%>%arrange(desc(Completeness))
+write.csv(tax_comp_xHP1_short_MQ_HQ,"tax_comp_xHP1_short_MQ_HQ.csv")
+
+```
+
+
+```{r}
+tax_STO1_short=read.delim2("/Users/sarahtucker/Documents/KByt/Diel_tRNA/MGX/STO1_metabat2_taxonomy_v2.txt")
+comp_STO1_short=read.delim2("/Users/sarahtucker/Documents/KByt/Diel_tRNA/MGX/STO1_checkm_v2.txt")
+
+tax_comp_STO1_short=left_join(tax_STO1_short, comp_STO1_short, by="bin_name")
+
+tax_comp_STO1_short$quality_completion=""
+
+tax_comp_STO1_short$quality_completion<- as.factor(ifelse(as.numeric(tax_comp_STO1_short$Completeness)>90, 'High_Comp', 
+                     ifelse(as.numeric(tax_comp_STO1_short$Completeness)>70, 'Medium_Comp', 'Low_Comp'))) 
+
+tax_comp_STO1_short$quality_contam=""
+tax_comp_STO1_short$quality_contam<- as.factor(ifelse(as.numeric(tax_comp_STO1_short$Contamination)<5, 'Low_Contam', 
+                     ifelse(as.numeric(tax_comp_STO1_short$Contamination)<10, 'Medium_Contam', 'High_Contam'))) 
+
+tax_comp_STO1_short$MAG_Quality <- paste(tax_comp_STO1_short$quality_completion, "_", tax_comp_STO1_short$quality_contam)
+unique(tax_comp_STO1_short$MAG_Quality)
+
+tax_comp_STO1_short$MAG_Quality<- gsub('High_Comp _ Medium_Contam', 'Medium', tax_comp_STO1_short$MAG_Quality)
+tax_comp_STO1_short$MAG_Quality<- gsub('Medium_Comp _ Low_Contam', 'Medium', tax_comp_STO1_short$MAG_Quality)
+tax_comp_STO1_short$MAG_Quality<- gsub('Medium_Comp _ Medium_Contam', 'Medium', tax_comp_STO1_short$MAG_Quality)
+tax_comp_STO1_short$MAG_Quality<- gsub('High_Comp _ Low_Contam', 'High', tax_comp_STO1_short$MAG_Quality)
+tax_comp_STO1_short$MAG_Quality<- gsub('Low_Comp _ Low_Contam', 'Low', tax_comp_STO1_short$MAG_Quality)
+tax_comp_STO1_short$MAG_Quality<- gsub('Low_Comp _ Medium_Contam', 'Low', tax_comp_STO1_short$MAG_Quality)
+tax_comp_STO1_short$MAG_Quality<- gsub('Medium_Comp _ High_Contam', 'Low', tax_comp_STO1_short$MAG_Quality)
+tax_comp_STO1_short$MAG_Quality<- gsub('Medium_Comp _ High_Contam', 'Low', tax_comp_STO1_short$MAG_Quality)
+tax_comp_STO1_short$MAG_Quality<- gsub('Low_Comp _ High_Contam', 'Low', tax_comp_STO1_short$MAG_Quality)
+tax_comp_STO1_short$MAG_Quality<- gsub('High_Comp _ High_Contam', 'Low', tax_comp_STO1_short$MAG_Quality)
+unique(tax_comp_STO1_short$MAG_Quality)
+
+summary_STO1_short=tax_comp_STO1_short%>%dplyr::group_by(MAG_Quality)%>%dplyr::summarise(n = n())
+write.csv(tax_comp_STO1_short,"tax_comp_STO1_short.csv")
+
+tax_comp_STO1_short_MQ_HQ=tax_comp_STO1_short%>%subset(MAG_Quality !="Low")
+tax_comp_STO1_short_MQ_HQ$Assembly="STO1_MGX_short_read"
+tax_comp_STO1_short_MQ_HQ=tax_comp_STO1_short_MQ_HQ%>%select("Assembly","bin_name","total_scgs","supporting_scgs","t_domain", "t_phylum", "t_class","t_order","t_family" ,"t_genus","t_species","Completeness","Contamination","MAG_Quality")
+
+tax_comp_STO1_short_MQ_HQ=tax_comp_STO1_short_MQ_HQ%>%arrange(desc(Completeness))
+write.csv(tax_comp_STO1_short_MQ_HQ,"tax_comp_STO1_short_MQ_HQ.csv")
+
+```
+
+
+###long read co-assemblies
+
+```{r}
+conda activate hifiasm-meta
+
+clusterize -n 1 --partition mpcp_hifmb.p -t 20-00:00:00 -j hifiasm_co_xHP1 -M 4124000 "hifiasm_meta -o /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/HMW/01_SITE_COASSEMBLIES/xHP1/xHP1_coassembly -t 1 /fs/dss/groups/agecodatasci/RESOURCES/PRIVATE/METAGENOMES/OCEAN/HAWAII_DIEL/HMW/HMW_CONCATENATED/HADS_20210818_H0900_HMW_xHP1_002_R1_000.fastq.gz /fs/dss/groups/agecodatasci/RESOURCES/PRIVATE/METAGENOMES/OCEAN/HAWAII_DIEL/HMW/HMW_CONCATENATED/HADS_20210818_H2100_HMW_xHP1_006_R1_000.fastq.gz /fs/dss/groups/agecodatasci/RESOURCES/PRIVATE/METAGENOMES/OCEAN/HAWAII_DIEL/HMW/HMW_CONCATENATED/HADS_20210819_H0300_HMW_xHP1_008_R1_000.fastq.gzq /fs/dss/groups/agecodatasci/RESOURCES/PRIVATE/METAGENOMES/OCEAN/HAWAII_DIEL/HMW/HMW_CONCATENATED/HADS_20210819_H2100_HMW_xHP1_014_R1_000.fastq.gz"
+```
+
+
+```{r}
+cp xHP1_coassembly.p_ctg.gfa xHP1_coassembly_backup.p_ctg.gfa
+#this is edited from florian
+mkdir /fs/dss/groups/agecodatasci/PROJECTS/HAWAII-DIEL-SAMPLING/HMW/02_FASTA_xHP1/
+
+awk -v name="xHP1_coassembly" '/^S/{cir=substr($2, length($2)); gsub(/\./,"_",$2); print ">"name"_"$2"_"length($3)"_"cir"\n"$3}' 01_SITE_COASSEMBLIES/xHP1/xHP1_coassembly.p_ctg.gfa > 02_FASTA_xHP1/xHP1_coassembly-reformatted.fa
+
+grep "^>" xHP1_coassembly-reformatted.fa
+
+
+grep ">" xHP1_coassembly-reformatted.fa| sed 's/>//' >> xHP1_contig_names.txt
+
+xHP1=read.delim2("/Users/sarahtucker/Documents/KByt/Diel_tRNA/HMW/xHP1_contig_names.txt")
+names(xHP1)
+xHP1=xHP1%>%unite("contig",c("site","coassembly","s","ctg","length","type" ),sep="_",remove = FALSE)
+summary(xHP1$length)
+min(xHP1$length)
+xHP1_c=xHP1%>%subset(type=="c")
+
+summary(xHP1_c$length)
+
+test=filter(xHP1,length>1000000 | type=="c")
+test=filter(xHP1,length>1000000)
+write.csv(test,"test_1000000_xHP1.csv")
+
+
+seqkit grep -n -f big_circular.txt xHP1_coassembly-reformatted.fa -o CIRCULAR_LONG/contigs_xHP1_1Mbp.fa
+grep "^>" contigs_xHP1_1Mbp.fa
+
+
+grep -v ">" xHP1_coassembly-reformatted.fa | wc -l
+
+mkdir CIRCULAR_LONG/individ_files/
+seqkit split -i CIRCULAR_LONG/contigs_xHP1_1Mbp.fa --out-dir CIRCULAR_LONG/individ_files/
+
+##further update the names
+for file in *; do
+  f=$(echo "$file" | sed -e 's/contigs_xHP1_1Mbp.part_//g')
+  echo "$f"
+done;
+
+
+for file in *; do
+  f=$(echo "$file" | sed -e 's/contigs_xHP1_1Mbp.part_//g')
+  mv $file "$f"
+done;
+```
+
+
+
+
+##create contig dbs for all the 
+```{r}
+
+clusterize "anvi-run-workflow -w contigs -c contig_config.json" --job-name contigs_workflow --num-nodes 1 --num-tasks-per-node 80 -t 20-00:00:03
+
+
+##output taxonomy of each 
+for i in *-contigs.db
+do
+  base=$(basename "$i")
+  prefix=$(echo "$base" | sed s/"-contigs.db$"/""/)
+  anvi-estimate-scg-taxonomy -c $i \
+  -o ${prefix}_scg_Tax.txt \
+  --num-threads 80
+done
+
+
+cat *_scg_Tax.txt >> xHP1_col_quality_scg_Tax.txt
+
+```
+
+
+##completion
+```{r}
+clusterize "checkm lineage_wf individ_files/ checkm/ -x fa -t 80" -n 80 -j checkm_xHP1
+```
+
+
+
+```{r}
+
+tax_HMW_xHP1=read.delim("/Users/sarahtucker/Documents/KByt/Diel_tRNA/HMW/xHP1_col_quality_scg_Tax.txt")
+tax_HMW_xHP1=tax_HMW_xHP1%>%subset(bin_name!="bin_name1")
+tax_HMW_xHP1=tax_HMW_xHP1%>%dplyr::rename("contig"="bin_name")
+names(tax_HMW_xHP1)
+tax_HMW_xHP1$ctg
+
+xHP1=read.delim2("/Users/sarahtucker/Documents/KByt/Diel_tRNA/HMW/xHP1_contig_names.txt")
+names(xHP1)
+xHP1=xHP1%>%unite("contig",c("site","coassembly","s","ctg","length","type" ),sep="_",remove = FALSE)
+summary(xHP1$length)
+min(xHP1$length)
+hist(xHP1$length)
+xHP1_c=xHP1%>%subset(type=="c")
+
+summary(xHP1_c$length)
+
+test=filter(xHP1,length>1000000 | type=="c")
+test=filter(xHP1,length>1000000)
+
+names(test)
+test$ctg
+
+names(test)
+
+ok=left_join(tax_HMW_xHP1, test, by="contig")
+
+checkm=read.delim("/Users/sarahtucker/Documents/KByt/Diel_tRNA/HMW/checkm_xHP1_HMW.txt")
+
+ok2=left_join(ok, checkm, by="contig")
+
+xHP1_HMW_contigs=ok2
+
+xHP1_HMW_contigs_HQ=xHP1_HMW_contigs
+
+
+xHP1_HMW_contigs_HQ$quality_completion=""
+
+xHP1_HMW_contigs_HQ$quality_completion<- as.factor(ifelse(as.numeric(xHP1_HMW_contigs_HQ$Completeness)>90, 'High_Comp', 
+                     ifelse(as.numeric(xHP1_HMW_contigs_HQ$Completeness)>70, 'Medium_Comp', 'Low_Comp'))) 
+
+xHP1_HMW_contigs_HQ$quality_contam=""
+xHP1_HMW_contigs_HQ$quality_contam<- as.factor(ifelse(as.numeric(xHP1_HMW_contigs_HQ$Contamination)<5, 'Low_Contam', 
+                     ifelse(as.numeric(xHP1_HMW_contigs_HQ$Contamination)<10, 'Medium_Contam', 'High_Contam'))) 
+
+xHP1_HMW_contigs_HQ$HMW_MAG_Quality <- paste(xHP1_HMW_contigs_HQ$quality_completion, "_", xHP1_HMW_contigs_HQ$quality_contam)
+unique(xHP1_HMW_contigs_HQ$HMW_MAG_Quality)
+
+xHP1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('High_Comp _ Medium_Contam', 'Medium', xHP1_HMW_contigs_HQ$HMW_MAG_Quality)
+xHP1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('Medium_Comp _ Low_Contam', 'Medium', xHP1_HMW_contigs_HQ$HMW_MAG_Quality)
+xHP1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('Medium_Comp _ Medium_Contam', 'Medium', xHP1_HMW_contigs_HQ$HMW_MAG_Quality)
+xHP1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('High_Comp _ Low_Contam', 'High', xHP1_HMW_contigs_HQ$HMW_MAG_Quality)
+xHP1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('Low_Comp _ Low_Contam', 'Low', xHP1_HMW_contigs_HQ$HMW_MAG_Quality)
+xHP1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('Low_Comp _ Medium_Contam', 'Low', xHP1_HMW_contigs_HQ$HMW_MAG_Quality)
+xHP1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('Medium_Comp _ High_Contam', 'Low', xHP1_HMW_contigs_HQ$HMW_MAG_Quality)
+xHP1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('Medium_Comp _ High_Contam', 'Low', xHP1_HMW_contigs_HQ$HMW_MAG_Quality)
+xHP1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('Low_Comp _ High_Contam', 'Low', xHP1_HMW_contigs_HQ$HMW_MAG_Quality)
+xHP1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('High_Comp _ High_Contam', 'Low', xHP1_HMW_contigs_HQ$HMW_MAG_Quality)
+unique(xHP1_HMW_contigs_HQ$HMW_MAG_Quality)
+
+summary_xHP1_long=xHP1_HMW_contigs_HQ%>%dplyr::group_by(HMW_MAG_Quality)%>%dplyr::summarise(n = n())
+
+##write everything 
+xHP1_HMW_contigs_HQ$Assembly="xHP1_long_read"
+xHP1_HMW_contigs_HQ=xHP1_HMW_contigs_HQ%>%select("Assembly","contig","total_scgs","supporting_scgs","t_domain", "t_phylum", "t_class","t_order","t_family","t_genus","t_species","Completeness","Contamination","HMW_MAG_Quality","length","type")
+xHP1_HMW_contigs_HQ=xHP1_HMW_contigs_HQ%>%arrange(desc(Completeness))
+write.csv(xHP1_HMW_contigs_HQ,"xHP1_HMW_contigs_HQ.csv")
+
+xHP1_HMW_contigs_HQ_MQ_HQ=xHP1_HMW_contigs_HQ%>%subset(HMW_MAG_Quality !="Low")
+
+
+names(xHP1_HMW_contigs_HQ_MQ_HQ)
+xHP1_HMW_contigs_HQ_MQ_HQ=xHP1_HMW_contigs_HQ_MQ_HQ%>%select("Assembly","contig","total_scgs","supporting_scgs","t_domain", "t_phylum", "t_class","t_order","t_family","t_genus","t_species","Completeness","Contamination","HMW_MAG_Quality","length","type")
+
+xHP1_HMW_contigs_HQ_MQ_HQ=xHP1_HMW_contigs_HQ_MQ_HQ%>%arrange(desc(Completeness))
+write.csv(xHP1_HMW_contigs_HQ_MQ_HQ,"xHP1_HMW_contigs_HQ_MQ.csv")
+```
+
+
+```{r}
+HQ_big_circular_STO1=read.delim("/Users/sarahtucker/Documents/KByt/Diel_tRNA/HMW/big_circular.txt")
+HQ_big_circular_STO1$contig_id=as.character(HQ_big_circular_STO1$contig_id)
+tax_HMW_STO1=read.delim("/Users/sarahtucker/Documents/KByt/Diel_tRNA/HMW/STO1_col_quality_scg_Tax.txt")
+tax_HMW_STO1=tax_HMW_STO1%>%subset(bin_name!="bin_name1")
+tax_HMW_STO1=tax_HMW_STO1%>%dplyr::rename("ctg"="bin_name")
+
+sto1=read.delim2("/Users/sarahtucker/Documents/KByt/Diel_tRNA/HMW/info_STO1_HMW_coassembly.txt")
+names(sto1)
+sto1=sto1%>%unite("contig",c("site","coassembly","s","ctg","length","type" ),sep="_",remove = FALSE)
+summary(sto1$length)
+min(sto1$length)
+hist(sto1$length)
+sto1_c=sto1%>%subset(type=="c")
+
+summary(sto1_c$length)
+
+test=filter(sto1,length>1000000 | type=="c")
+test=filter(sto1,length>1000000)
+
+names(test)
+test$ctg
+
+
+ok=left_join(tax_HMW_STO1, test, by="ctg")
+
+checkm=read.delim("/Users/sarahtucker/Documents/KByt/Diel_tRNA/HMW/STO1_HMW_checkm.txt")
+
+ok2=left_join(ok, checkm, by="contig")
+
+names(ok2)
+
+
+STO1_HMW_contigs=ok2
+
+STO1_HMW_contigs_HQ=STO1_HMW_contigs
+
+
+STO1_HMW_contigs_HQ$quality_completion=""
+
+STO1_HMW_contigs_HQ$quality_completion<- as.factor(ifelse(as.numeric(STO1_HMW_contigs_HQ$Completeness)>90, 'High_Comp', 
+                     ifelse(as.numeric(STO1_HMW_contigs_HQ$Completeness)>70, 'Medium_Comp', 'Low_Comp'))) 
+
+STO1_HMW_contigs_HQ$quality_contam=""
+STO1_HMW_contigs_HQ$quality_contam<- as.factor(ifelse(as.numeric(STO1_HMW_contigs_HQ$Contamination)<5, 'Low_Contam', 
+                     ifelse(as.numeric(STO1_HMW_contigs_HQ$Contamination)<10, 'Medium_Contam', 'High_Contam'))) 
+
+STO1_HMW_contigs_HQ$HMW_MAG_Quality <- paste(STO1_HMW_contigs_HQ$quality_completion, "_", STO1_HMW_contigs_HQ$quality_contam)
+unique(STO1_HMW_contigs_HQ$HMW_MAG_Quality)
+
+STO1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('High_Comp _ Medium_Contam', 'Medium', STO1_HMW_contigs_HQ$HMW_MAG_Quality)
+STO1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('Medium_Comp _ Low_Contam', 'Medium', STO1_HMW_contigs_HQ$HMW_MAG_Quality)
+STO1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('Medium_Comp _ Medium_Contam', 'Medium', STO1_HMW_contigs_HQ$HMW_MAG_Quality)
+STO1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('High_Comp _ Low_Contam', 'High', STO1_HMW_contigs_HQ$HMW_MAG_Quality)
+STO1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('Low_Comp _ Low_Contam', 'Low', STO1_HMW_contigs_HQ$HMW_MAG_Quality)
+STO1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('Low_Comp _ Medium_Contam', 'Low', STO1_HMW_contigs_HQ$HMW_MAG_Quality)
+STO1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('Medium_Comp _ High_Contam', 'Low', STO1_HMW_contigs_HQ$HMW_MAG_Quality)
+STO1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('Medium_Comp _ High_Contam', 'Low', STO1_HMW_contigs_HQ$HMW_MAG_Quality)
+STO1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('Low_Comp _ High_Contam', 'Low', STO1_HMW_contigs_HQ$HMW_MAG_Quality)
+STO1_HMW_contigs_HQ$HMW_MAG_Quality<- gsub('High_Comp _ High_Contam', 'Low', STO1_HMW_contigs_HQ$HMW_MAG_Quality)
+unique(STO1_HMW_contigs_HQ$HMW_MAG_Quality)
+
+summary_STO1_long=STO1_HMW_contigs_HQ%>%dplyr::group_by(HMW_MAG_Quality)%>%dplyr::summarise(n = n())
+
+##write everything 
+STO1_HMW_contigs_HQ$Assembly="STO1_long_read"
+STO1_HMW_contigs_HQ=STO1_HMW_contigs_HQ%>%select("Assembly","contig","total_scgs","supporting_scgs","t_domain", "t_phylum", "t_class","t_order","t_family","t_genus","t_species","Completeness","Contamination","HMW_MAG_Quality","length","type",)
+STO1_HMW_contigs_HQ=STO1_HMW_contigs_HQ%>%arrange(desc(Completeness))
+write.csv(STO1_HMW_contigs_HQ,"STO1_HMW_contigs_HQ.csv")
+
+STO1_HMW_contigs_HQ_MQ_HQ=STO1_HMW_contigs_HQ%>%subset(HMW_MAG_Quality !="Low")
+names(STO1_HMW_contigs_HQ_MQ_HQ)
+STO1_HMW_contigs_HQ_MQ_HQ=STO1_HMW_contigs_HQ_MQ_HQ%>%select("Assembly","contig","total_scgs","supporting_scgs","t_domain", "t_phylum", "t_class","t_order","t_family","t_genus","t_species","Completeness","Contamination","HMW_MAG_Quality","length","type")
+
+STO1_HMW_contigs_HQ_MQ_HQ=STO1_HMW_contigs_HQ_MQ_HQ%>%arrange(desc(Completeness))
+write.csv(STO1_HMW_contigs_HQ_MQ_HQ,"STO1_HMW_contigs_HQ_MQ.csv")
+
+```
+
+
+```{r}
+STO1_HMW_contigs_HQ_MQ_HQ
+xHP1_HMW_contigs_HQ_MQ_HQ
+STO1_HMW_contigs_HQ_MQ_HQ=STO1_HMW_contigs_HQ%>%subset(HMW_MAG_Quality !="Low")
+
+tax_comp_STO1_short_MQ_HQ
+tax_comp_xHP1_short_MQ_HQ
+
+tog=rbind(tax_comp_STO1_short_MQ_HQ, tax_comp_xHP1_short_MQ_HQ)
+names(tog)
+STO1_HMW_contigs_HQ_MQ_HQ_v2=STO1_HMW_contigs_HQ_MQ_HQ[,1:14]
+xHP1_HMW_contigs_HQ_MQ_HQ_v2=xHP1_HMW_contigs_HQ_MQ_HQ[,1:14]
+names(xHP1_HMW_contigs_HQ_MQ_HQ_v2)
+
+tog2=rbind(STO1_HMW_contigs_HQ_MQ_HQ_v2,xHP1_HMW_contigs_HQ_MQ_HQ_v2 )
+tog2=tog2%>%dplyr::rename("bin_name"="contig")
+tog2=tog2%>%dplyr::rename("MAG_Quality"="HMW_MAG_Quality")
+names(tog2)
+tog3=rbind(tog2,tog)
+
+tog4=tog3%>%subset(MAG_Quality !="Low")%>%subset(MAG_Quality !="Medium")
+names(tog4)
+
+info=tog4%>%group_by(Assembly, t_order)%>%count()
+unique(info$t_family)
+library(randomcoloR)
+family=randomColor(22)
+ggplot(info, aes(x=Assembly, y=n, fill=t_family))+geom_bar(stat="identity")+scale_fill_manual(values=family)+ggtitle("High Quality")
+ggsave("High_quality.png", width=10)
+
+
+info=tog3%>%group_by(Assembly, t_family)%>%count()
+length(unique(info$t_family))
+library(randomcoloR)
+family_v2=randomColor(46)
+ggplot(info, aes(x=Assembly, y=n, fill=t_family))+geom_bar(stat="identity")+scale_fill_manual(values=family_v2)
+
+
+
+
+info=tog3%>%group_by(Assembly, t_order)%>%count()
+length(unique(info$t_order))
+library(randomcoloR)
+order_v2=randomColor(32)
+ggplot(info, aes(x=Assembly, y=n, fill=t_order))+geom_bar(stat="identity")+scale_fill_manual(values=order_v2)+ggtitle("Medium and High Quality")
+ggsave("Medium_High_quality.png", width=10)
+
+
+
+info=tog3%>%group_by(Assembly, t_domain)%>%count()
+length(unique(info$t_order))
+```
+
+
